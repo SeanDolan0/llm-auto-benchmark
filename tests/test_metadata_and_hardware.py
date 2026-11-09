@@ -111,3 +111,274 @@ def test_auto_detect_model_ram_gb(tmp_path):
     # Test fallback analytical detection
     ram = auto_detect_model_ram_gb(param_count_b=7.0, quantization="GGUF_Q4_K_M")
     assert ram == 4.55
+
+
+def test_parse_vulkaninfo_devices_reads_name_and_driver():
+    from slm_bench.models.hardware import _parse_vulkaninfo_devices
+
+    text = """deviceName = AMD Radeon RX 9060 XT (RADV GFX1200)
+driverName = radv
+driverInfo = Mesa 26.2.4-arch1.1
+deviceName = AMD Ryzen 7 7700X 8-Core Processor (RADV RAPHAEL_MENDOCINO)
+driverName = radv
+driverInfo = Mesa 26.2.4-arch1.1
+deviceName = llvmpipe (LLVM 20.1.8, 256 bits)
+driverName = llvmpipe
+"""
+    devices = _parse_vulkaninfo_devices(text)
+    assert devices[0] == {
+        "name": "AMD Radeon RX 9060 XT (RADV GFX1200)",
+        "driver": "Mesa 26.2.4-arch1.1",
+        "vendor_id": None,
+        "device_type": None,
+    }
+    assert len(devices) == 3
+
+
+def test_select_vulkan_device_skips_igpu_and_software():
+    from slm_bench.models.hardware import _select_vulkan_device
+
+    devices = [
+        {"name": "AMD Ryzen 7 7700X 8-Core Processor (RADV RAPHAEL_MENDOCINO)", "driver": "Mesa"},
+        {"name": "llvmpipe (LLVM 20.1.8, 256 bits)", "driver": "llvmpipe"},
+        {"name": "AMD Radeon RX 9060 XT (RADV GFX1200)", "driver": "Mesa 26.2.4"},
+    ]
+    assert _select_vulkan_device(devices)["name"] == "AMD Radeon RX 9060 XT (RADV GFX1200)"
+
+
+def test_parse_sysfs_amd_cards_reads_amd_only_and_sorts_by_vram(tmp_path):
+    from slm_bench.models.hardware import _parse_sysfs_amd_cards
+
+    def card(name, vendor, vram, slot):
+        target = tmp_path / slot
+        target.mkdir()
+        card_dir = tmp_path / name
+        card_dir.mkdir()
+        (card_dir / "device").symlink_to(target, target_is_directory=True)
+        (target / "vendor").write_text(vendor)
+        (target / "mem_info_vram_total").write_text(str(vram))
+
+    card("card0", "0x1002", 512 * 1024**2, "0000:0f:00.0")       # AMD iGPU
+    card("card1", "0x1002", 17095983104, "0000:03:00.0")          # AMD dGPU
+    card("card2", "0x10de", 8 * 1024**3, "0000:01:00.0")          # NVIDIA
+
+    cards = _parse_sysfs_amd_cards(tmp_path)
+    assert cards == [
+        {"pci_slot": "0000:03:00.0", "vram_gb": 15.92},
+        {"pci_slot": "0000:0f:00.0", "vram_gb": 0.5},
+    ]
+
+
+def test_vulkaninfo_parser_ignores_empty_output():
+    from slm_bench.models.hardware import _parse_vulkaninfo_devices
+
+    assert _parse_vulkaninfo_devices("") == []
+    assert _parse_vulkaninfo_devices("driverInfo = Mesa\n") == []
+
+
+def test_parse_vulkaninfo_devices_accepts_padded_output():
+    from slm_bench.models.hardware import _parse_vulkaninfo_devices
+
+    text = (
+        "\tdeviceName         = AMD Radeon RX 9060 XT (RADV GFX1200)\n"
+        "\tdriverName         = radv\n"
+        "\tdriverInfo         = Mesa 26.2.4-arch1.1\n"
+    )
+    assert _parse_vulkaninfo_devices(text) == [
+        {
+            "name": "AMD Radeon RX 9060 XT (RADV GFX1200)",
+            "driver": "Mesa 26.2.4-arch1.1",
+            "vendor_id": None,
+            "device_type": None,
+        }
+    ]
+
+
+def test_parse_lspci_names_cleans_device_name():
+    from slm_bench.models.hardware import _parse_lspci_names
+
+    text = (
+        '0000:03:00.0 "VGA compatible controller [0300]" '
+        '"Advanced Micro Devices, Inc. [AMD/ATI] [1002:7590]" -r00 '
+        '"Navi 44 [Radeon RX 9050 / 9060 XT] [1002:7590]"\n'
+    )
+    assert _parse_lspci_names(text) == {
+        "0000:03:00.0": "Navi 44 [Radeon RX 9050 / 9060 XT]"
+    }
+
+
+def test_get_hardware_info_uses_amd_when_nvidia_absent(monkeypatch):
+    import types
+    import slm_bench.models.hardware as hardware
+
+    monkeypatch.setattr(hardware.platform, "system", lambda: "Linux")
+    monkeypatch.setattr(
+        hardware.subprocess,
+        "run",
+        lambda *a, **k: types.SimpleNamespace(returncode=1, stdout="", stderr=""),
+    )
+    monkeypatch.setattr(
+        hardware,
+        "_detect_amd_gpu",
+        lambda: {"name": "AMD Radeon RX 9060 XT (RADV GFX1200)", "count": 1, "vram_gb": 15.92, "driver": "Mesa 26.2.4"},
+    )
+    hw = hardware.get_hardware_info()
+    assert hw.gpu_name == "AMD Radeon RX 9060 XT (RADV GFX1200)"
+    assert hw.gpu_count == 1
+    assert hw.gpu_vram_gb == 15.92
+    assert hw.driver_version == "Mesa 26.2.4"
+
+
+def test_get_hardware_info_does_not_probe_amd_when_nvidia_found(monkeypatch):
+    import types
+    import slm_bench.models.hardware as hardware
+
+    def fake_run(cmd, *a, **k):
+        if cmd[:2] == ["nvidia-smi", "--query-gpu=name,memory.total,driver_version"]:
+            return types.SimpleNamespace(returncode=0, stdout="NVIDIA GeForce RTX 5070 Ti, 12288, 555.42\n", stderr="")
+        return types.SimpleNamespace(returncode=1, stdout="", stderr="")
+
+    monkeypatch.setattr(hardware.platform, "system", lambda: "Linux")
+    monkeypatch.setattr(hardware.subprocess, "run", fake_run)
+    monkeypatch.setattr(hardware, "_detect_amd_gpu", lambda: pytest.fail("AMD probe must not run"))
+    hw = hardware.get_hardware_info()
+    assert hw.gpu_name == "NVIDIA GeForce RTX 5070 Ti"
+
+
+def test_parse_windows_video_controllers_keeps_amd_only():
+    import json
+    from slm_bench.models.hardware import _parse_windows_video_controllers
+
+    payload = json.dumps([
+        {"Name": "AMD Radeon RX 9060 XT", "DriverVersion": "31.0.12027.9001",
+         "AdapterRAM": 4293918720, "PNPDeviceID": r"PCI\VEN_1002&DEV_7590&SUBSYS_00000000"},
+        {"Name": "Microsoft Basic Display Adapter", "DriverVersion": "10.0.19041.1",
+         "AdapterRAM": 0, "PNPDeviceID": r"PCI\VEN_1002&DEV_0000"},
+        {"Name": "Intel(R) UHD Graphics 770", "DriverVersion": "31.0.101.4502",
+         "AdapterRAM": 1073741824, "PNPDeviceID": r"PCI\VEN_8086&DEV_4680"},
+    ])
+    devices = _parse_windows_video_controllers(payload)
+    assert devices == [{"name": "AMD Radeon RX 9060 XT", "driver": "31.0.12027.9001", "adapter_ram": 4293918720}]
+
+
+def test_parse_windows_video_controllers_accepts_single_object():
+    import json
+    from slm_bench.models.hardware import _parse_windows_video_controllers
+
+    payload = json.dumps({"Name": "AMD Radeon RX 7900 XTX", "DriverVersion": "31.0.1",
+                          "AdapterRAM": 0, "PNPDeviceID": r"PCI\VEN_1002&DEV_744C"})
+    assert [d["name"] for d in _parse_windows_video_controllers(payload)] == ["AMD Radeon RX 7900 XTX"]
+
+
+def test_choose_windows_vram_prefers_registry_and_rejects_wrapped_adapter_ram():
+    from slm_bench.models.hardware import _choose_windows_vram
+
+    assert _choose_windows_vram(17095983104, 4293918720) == 15.92
+    assert _choose_windows_vram(None, 4293918720) is None
+    assert _choose_windows_vram(None, 2147483648) == 2.0
+    assert _choose_windows_vram(None, None) is None
+
+
+def test_windows_parser_ignores_malformed_output():
+    from slm_bench.models.hardware import _parse_windows_video_controllers
+
+    assert _parse_windows_video_controllers("not json") == []
+    assert _parse_windows_video_controllers("") == []
+
+
+def test_detect_amd_gpu_dispatches_windows(monkeypatch):
+    import slm_bench.models.hardware as hardware
+
+    monkeypatch.setattr(hardware.platform, "system", lambda: "Windows")
+    monkeypatch.setattr(hardware, "_detect_amd_windows", lambda: {"name": "AMD Radeon RX 9060 XT", "count": 1, "vram_gb": 15.92, "driver": "31.0.12027.9001"})
+    assert hardware._detect_amd_gpu()["name"] == "AMD Radeon RX 9060 XT"
+
+
+def test_parse_vulkaninfo_devices_reads_vendor_and_device_type():
+    from slm_bench.models.hardware import _parse_vulkaninfo_devices
+
+    text = (
+        "Devices:\n========\nGPU0:\n"
+        "\tapiVersion         = 1.4.354\n"
+        "\tvendorID           = 0x1002\n"
+        "\tdeviceID           = 0x7590\n"
+        "\tdeviceType         = PHYSICAL_DEVICE_TYPE_DISCRETE_GPU\n"
+        "\tdeviceName         = AMD Radeon RX 9060 XT (RADV GFX1200)\n"
+        "\tdriverInfo         = Mesa 26.2.4-arch1.1\n"
+        "GPU1:\n"
+        "\tvendorID           = 0x1002\n"
+        "\tdeviceID           = 0x164e\n"
+        "\tdeviceType         = PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU\n"
+        "\tdeviceName         = AMD Ryzen 7 7700X 8-Core Processor (RADV RAPHAEL_MENDOCINO)\n"
+        "\tdriverInfo         = Mesa 26.2.4-arch1.1\n"
+    )
+    devices = _parse_vulkaninfo_devices(text)
+    assert devices[0] == {
+        "name": "AMD Radeon RX 9060 XT (RADV GFX1200)",
+        "driver": "Mesa 26.2.4-arch1.1",
+        "vendor_id": "0x1002",
+        "device_type": "PHYSICAL_DEVICE_TYPE_DISCRETE_GPU",
+    }
+    assert devices[1]["device_type"] == "PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU"
+
+
+def test_select_vulkan_device_prefers_discrete_amd_over_integrated_and_other_vendors():
+    from slm_bench.models.hardware import _select_vulkan_device
+
+    devices = [
+        {"name": "AMD Radeon 780M (RADV PHOENIX)", "driver": "Mesa",
+         "vendor_id": "0x1002", "device_type": "PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU"},
+        {"name": "Intel(R) Arc(TM) A770 Graphics (DG2)", "driver": "Intel",
+         "vendor_id": "0x8086", "device_type": "PHYSICAL_DEVICE_TYPE_DISCRETE_GPU"},
+        {"name": "AMD Radeon RX 7600M XT (RADV NAVI33)", "driver": "Mesa",
+         "vendor_id": "0x1002", "device_type": "PHYSICAL_DEVICE_TYPE_DISCRETE_GPU"},
+    ]
+    assert _select_vulkan_device(devices)["name"] == "AMD Radeon RX 7600M XT (RADV NAVI33)"
+
+
+def test_parse_sysfs_amd_cards_keeps_unknown_vram_last(tmp_path):
+    from slm_bench.models.hardware import _parse_sysfs_amd_cards
+
+    def card(name, vendor, slot, vram):
+        target = tmp_path / slot
+        target.mkdir()
+        card_dir = tmp_path / name
+        card_dir.mkdir()
+        (card_dir / "device").symlink_to(target, target_is_directory=True)
+        (target / "vendor").write_text(vendor)
+        if vram is not None:
+            (target / "mem_info_vram_total").write_text(str(vram))
+
+    card("card0", "0x1002", "0000:0f:00.0", 512 * 1024**2)
+    card("card1", "0x1002", "0000:03:00.0", None)
+
+    cards = _parse_sysfs_amd_cards(tmp_path)
+    assert cards[0]["vram_gb"] == 0.5
+    assert cards[1]["vram_gb"] is None
+
+
+def test_detect_amd_windows_prefers_largest_vram(monkeypatch):
+    import json
+    import types
+    import slm_bench.models.hardware as hardware
+
+    payload = json.dumps([
+        {"Name": "AMD Radeon(TM) Graphics", "DriverVersion": "31.0.1",
+         "AdapterRAM": 536870912, "PNPDeviceID": r"PCI\VEN_1002&DEV_164e"},
+        {"Name": "AMD Radeon RX 7600M XT", "DriverVersion": "31.0.1",
+         "AdapterRAM": 4293918720, "PNPDeviceID": r"PCI\VEN_1002&DEV_7480"},
+    ])
+    registry = {
+        "AMD Radeon(TM) Graphics": 536870912,
+        "AMD Radeon RX 7600M XT": 8589934592,
+    }
+    monkeypatch.setattr(
+        hardware.subprocess,
+        "run",
+        lambda *a, **k: types.SimpleNamespace(returncode=0, stdout=payload, stderr=""),
+    )
+    monkeypatch.setattr(hardware, "_windows_registry_vram", lambda name: registry.get(name))
+    result = hardware._detect_amd_windows()
+    assert result["name"] == "AMD Radeon RX 7600M XT"
+    assert result["vram_gb"] == 8.0
+    assert result["count"] == 2

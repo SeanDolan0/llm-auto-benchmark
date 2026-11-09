@@ -187,6 +187,24 @@ slm-bench evaluate \
   --benchmark gpqa_diamond
 ```
 
+#### Reasoning models and token budgets:
+Reasoning models may spend their entire output budget on a separate thinking channel and return an empty answer. The harness exposes generic controls rather than model-specific rules:
+
+```bash
+slm-bench evaluate ... \
+  --thinking off \
+  --max-new-tokens 2048 \
+  --truncation-policy retry \
+  --max-token-budget 16384 \
+  --adaptive-budget
+```
+
+- `--thinking auto|on|off` passes `chat_template_kwargs` to servers that support it.
+- `--max-new-tokens` overrides the per-question answer budget.
+- `--truncation-policy retry` doubles the budget after a length-truncated answer until `--max-token-budget`; it never repeats at the cap. `invalid` or `accept` are also available.
+- `--adaptive-budget` remembers a per-task starting cap in `--budget-state` (default `~/.cache/slm-bench/token_budgets.json`), halves it when a task finishes far below it, and raises it when a task needs more.
+- Results report `truncated_samples`, `cap_exceeded_samples`, `truncation_rate`, `tokens_used`, `tokens_per_correct`, `budget_start_max`, and `completion_budget_p95` in the result JSON and per-task provenance.
+
 #### Reuse prior answers (replay checkpoints):
 Pass `--checkpoint PATH` to read an existing JSONL checkpoint and append every new model call to it. A later run reuses calls whose model, quantization, backend, reasoning effort, task, dataset revision, and generation parameters match; everything else runs fresh.
 

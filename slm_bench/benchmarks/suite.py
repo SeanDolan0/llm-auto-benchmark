@@ -65,6 +65,37 @@ class BenchmarkSuite:
         if count:
             metric.sub_metrics["reused_samples"] = count
 
+    @staticmethod
+    def _annotate_question_results(metric: TaskMetric) -> None:
+        """Record truncation and token-budget diagnostics for a task."""
+        results = metric.question_results or []
+        if not results:
+            return
+        truncated = sum(1 for result in results if result.truncated)
+        cap_exceeded = sum(1 for result in results if result.cap_exceeded)
+        tokens = [result.tokens_generated for result in results if result.tokens_generated]
+        starts = [result.budget_start for result in results if result.budget_start]
+        completed_budgets = sorted(
+            result.completion_budget
+            for result in results
+            if result.completion_budget and not result.truncated
+        )
+        if truncated:
+            metric.sub_metrics["truncated_samples"] = truncated
+        if cap_exceeded:
+            metric.sub_metrics["cap_exceeded_samples"] = cap_exceeded
+        if tokens:
+            metric.sub_metrics["tokens_used"] = sum(tokens)
+            metric.sub_metrics["avg_tokens"] = round(sum(tokens) / len(tokens), 1)
+            if metric.passed_samples:
+                metric.sub_metrics["tokens_per_correct"] = round(sum(tokens) / metric.passed_samples, 1)
+        if starts:
+            metric.sub_metrics["budget_start_max"] = max(starts)
+        if completed_budgets:
+            metric.sub_metrics["completion_budget_max"] = max(completed_budgets)
+            p95_index = min(len(completed_budgets) - 1, int(0.95 * (len(completed_budgets) - 1)))
+            metric.sub_metrics["completion_budget_p95"] = completed_budgets[p95_index]
+
     def run_suite(
         self,
         backend: BaseInferenceBackend,
@@ -81,6 +112,7 @@ class BenchmarkSuite:
         cancel_event: Optional[Any] = None,
         seed: int = 42,
         checkpoint_path: Optional[str] = None,
+        generation_policy: str = "",
     ) -> BenchmarkResult:
         """
         Execute evaluation suite and return standardized BenchmarkResult (Schema 2.0.0).
@@ -159,6 +191,7 @@ class BenchmarkSuite:
                         metric.ci_lower = ci_l
                         metric.ci_upper = ci_u
                     self._count_reused_questions(metric)
+                    self._annotate_question_results(metric)
 
                     if cancel_event and cancel_event.is_set():
                         raise InterruptedError("Benchmark cancelled by user.")
@@ -189,6 +222,7 @@ class BenchmarkSuite:
                     metric.ci_lower = ci_l
                     metric.ci_upper = ci_u
                 self._count_reused_questions(metric)
+                self._annotate_question_results(metric)
 
                 if cancel_event and cancel_event.is_set():
                     raise InterruptedError("Benchmark cancelled by user.")
@@ -225,6 +259,29 @@ class BenchmarkSuite:
                 avg_tokens_per_sec=avg_tps,
                 model_ram_gb=model_meta.model_ram_gb or hardware_info.model_ram_gb,
                 peak_vram_gb=telemetry_summary.get("peak_vram_mb", 0.0) / 1024.0 if telemetry_summary.get("peak_vram_mb") else None,
+            )
+
+        total_truncated = sum(
+            metric.sub_metrics.get("truncated_samples", 0) for metric in task_metrics.values()
+        )
+        total_cap_exceeded = sum(
+            metric.sub_metrics.get("cap_exceeded_samples", 0) for metric in task_metrics.values()
+        )
+        total_tokens = sum(
+            metric.sub_metrics.get("tokens_used", 0) for metric in task_metrics.values()
+        )
+        total_reasoning_tokens = sum(
+            result.reasoning_tokens or 0
+            for metric in task_metrics.values()
+            for result in (metric.question_results or [])
+        )
+        total_samples = sum(metric.total_samples for metric in task_metrics.values())
+        truncation_rate = (total_truncated / total_samples) if total_samples else 0.0
+        cap_exceeded_rate = (total_cap_exceeded / total_samples) if total_samples else 0.0
+        if total_truncated:
+            logger.warning(
+                f"{total_truncated} question(s) were truncated at the token cap. "
+                "Increase --max-new-tokens / --max-token-budget or disable thinking."
             )
 
         eval_id = str(uuid.uuid4())
@@ -272,5 +329,12 @@ class BenchmarkSuite:
                     if checkpoint_store is not None else None
                 ),
                 "reused_samples": total_reused,
+                "truncated_samples": total_truncated,
+                "truncation_rate": round(truncation_rate, 4),
+                "cap_exceeded_samples": total_cap_exceeded,
+                "cap_exceeded_rate": round(cap_exceeded_rate, 4),
+                "total_tokens": total_tokens,
+                "total_reasoning_tokens": total_reasoning_tokens,
+                "generation_policy": generation_policy,
             },
         )

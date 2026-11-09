@@ -9,11 +9,33 @@ import time
 
 class GenerationResult:
     """Detailed result of a text generation call."""
-    def __init__(self, text: str, latency_ms: float, tokens_generated: int = 0, reused: bool = False):
+    def __init__(
+        self,
+        text: str,
+        latency_ms: float,
+        tokens_generated: int = 0,
+        reused: bool = False,
+        reasoning_text: str = "",
+        reasoning_tokens: int = 0,
+        finish_reason: Optional[str] = None,
+        truncated: bool = False,
+        final_tokens: Optional[int] = None,
+        budget_start: Optional[int] = None,
+        final_budget: Optional[int] = None,
+        cap_exceeded: bool = False,
+    ):
         self.text = text
         self.latency_ms = latency_ms
         self.tokens_generated = tokens_generated
         self.reused = reused
+        self.reasoning_text = reasoning_text
+        self.reasoning_tokens = reasoning_tokens
+        self.finish_reason = finish_reason
+        self.truncated = truncated
+        self.final_tokens = tokens_generated if final_tokens is None else final_tokens
+        self.budget_start = budget_start
+        self.final_budget = final_budget
+        self.cap_exceeded = cap_exceeded
         self.tokens_per_sec = (tokens_generated / (latency_ms / 1000.0)) if latency_ms > 0 and tokens_generated > 0 else 0.0
 
 

@@ -93,11 +93,39 @@ def evaluate(
     dry_run: bool = typer.Option(False, "--dry-run", help="Dry-run mode"),
     notes: Optional[str] = typer.Option(None, "--notes", help="Optional notes on runner configuration or hardware offloading"),
     reasoning_effort: Optional[str] = typer.Option(None, "--reasoning-effort", "--effort", help="Reasoning effort level (model-dependent; none, minimal, low, medium, high, xhigh, max)"),
+    max_new_tokens: Optional[int] = typer.Option(None, "--max-new-tokens", help="Override the per-question answer token budget"),
+    thinking: str = typer.Option("auto", "--thinking", help="Thinking mode for reasoning models: auto, on, off"),
+    truncation_policy: str = typer.Option("retry", "--truncation-policy", help="On a length-truncated answer: retry, invalid, accept"),
+    max_token_budget: int = typer.Option(16384, "--max-token-budget", help="Maximum answer-token budget when retrying truncation (0 = 32768)"),
+    min_token_budget: int = typer.Option(128, "--min-token-budget", help="Minimum adaptive starting budget"),
+    adaptive_budget: bool = typer.Option(False, "--adaptive-budget/--no-adaptive-budget", help="Remember per-task token caps and start there on the next run"),
+    budget_state: str = typer.Option("~/.cache/slm-bench/token_budgets.json", "--budget-state", help="Path for adaptive token-budget state"),
 ):
     """Run official benchmark evaluation suite on a single model and save standardized JSON (Schema 2.0.0)."""
     setup_logger()
     if isinstance(reasoning_effort, typer.models.OptionInfo):
         reasoning_effort = None
+    if isinstance(max_new_tokens, typer.models.OptionInfo):
+        max_new_tokens = None
+    if isinstance(thinking, typer.models.OptionInfo):
+        thinking = "auto"
+    if isinstance(truncation_policy, typer.models.OptionInfo):
+        truncation_policy = "retry"
+    if isinstance(max_token_budget, typer.models.OptionInfo):
+        max_token_budget = 16384
+    if isinstance(min_token_budget, typer.models.OptionInfo):
+        min_token_budget = 128
+    if isinstance(adaptive_budget, typer.models.OptionInfo):
+        adaptive_budget = False
+    if isinstance(budget_state, typer.models.OptionInfo):
+        budget_state = "~/.cache/slm-bench/token_budgets.json"
+    if thinking not in ("auto", "on", "off"):
+        raise typer.BadParameter("--thinking must be one of: auto, on, off")
+    if truncation_policy not in ("retry", "invalid", "accept"):
+        raise typer.BadParameter("--truncation-policy must be one of: retry, invalid, accept")
+    if max_token_budget <= 0:
+        max_token_budget = 32768
+    min_token_budget = max(1, min_token_budget)
     if isinstance(profile, typer.models.OptionInfo) or not profile:
         profile = "standard"
     if isinstance(model_ram_gb, typer.models.OptionInfo):
@@ -132,6 +160,18 @@ def evaluate(
         logger.info(f"Model RAM / VRAM footprint: [bold cyan]{meta.model_ram_gb:.2f} GB[/bold cyan]")
 
     # 3. Instantiate Backend
+    budget_manager = None
+    if adaptive_budget:
+        from .execution.budget import BudgetManager
+
+        budget_manager = BudgetManager(
+            path=budget_state,
+            model_id=model_id,
+            quantization=quantization,
+            backend=backend,
+            thinking=thinking,
+            min_start=min_token_budget,
+        )
     try:
         engine = get_backend(
             backend,
@@ -141,6 +181,11 @@ def evaluate(
             api_key=api_key,
             model_ram_gb=meta.model_ram_gb,
             reasoning_effort=reasoning_effort,
+            max_new_tokens=max_new_tokens,
+            thinking=thinking,
+            truncation_policy=truncation_policy,
+            max_token_budget=max_token_budget,
+            budget_manager=budget_manager,
         )
         engine.load()
     except Exception as e:
@@ -211,6 +256,10 @@ def evaluate(
         notes=final_notes,
         seed=seed,
         checkpoint_path=checkpoint,
+        generation_policy=(
+            f"thinking={thinking};truncation={truncation_policy};"
+            f"min={min_token_budget};cap={max_token_budget};adaptive={adaptive_budget}"
+        ),
     )
 
     # 7. Save JSON Output

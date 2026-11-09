@@ -33,9 +33,11 @@ class InferenceGateway:
         self.reused_calls = 0
 
     def set_task_context(self, task_id: str, dataset_revision: str = "official") -> None:
-        """Set the current benchmark provenance used by replay keying."""
+        """Set the current benchmark provenance and adaptive-budget context."""
         self.task_id = task_id
         self.dataset_revision = dataset_revision
+        if hasattr(self.backend, "current_task_id"):
+            self.backend.current_task_id = task_id
 
     def _checkpoint_key(self, mode: str, payload: Dict[str, Any]) -> Optional[str]:
         if self.checkpoint_store is None or self.task_id is None:

@@ -2,6 +2,8 @@
 Tests for hardware detection, model metadata, and parameter extraction.
 """
 
+import platform
+
 import pytest
 from slm_bench.models.hardware import get_hardware_info
 from slm_bench.models.metadata import (
@@ -146,6 +148,10 @@ def test_select_vulkan_device_skips_igpu_and_software():
     assert _select_vulkan_device(devices)["name"] == "AMD Radeon RX 9060 XT (RADV GFX1200)"
 
 
+@pytest.mark.skipif(
+    platform.system() == "Windows",
+    reason="Fake sysfs PCI slots contain ':' which is not a valid Windows directory name",
+)
 def test_parse_sysfs_amd_cards_reads_amd_only_and_sorts_by_vram(tmp_path):
     from slm_bench.models.hardware import _parse_sysfs_amd_cards
 
@@ -336,6 +342,10 @@ def test_select_vulkan_device_prefers_discrete_amd_over_integrated_and_other_ven
     assert _select_vulkan_device(devices)["name"] == "AMD Radeon RX 7600M XT (RADV NAVI33)"
 
 
+@pytest.mark.skipif(
+    platform.system() == "Windows",
+    reason="Fake sysfs PCI slots contain ':' which is not a valid Windows directory name",
+)
 def test_parse_sysfs_amd_cards_keeps_unknown_vram_last(tmp_path):
     from slm_bench.models.hardware import _parse_sysfs_amd_cards
 

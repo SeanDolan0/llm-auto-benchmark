@@ -38,7 +38,7 @@
         <p class="lede">
           Empirical benchmark rankings, memory footprints, and generation speeds for open-weight models
           evaluated on consumer GPUs, Apple Silicon, and system RAM. Featuring multi-track rankings
-          (General Intelligence, Coding &amp; Agentic, Local Efficiency), standardized profiles (quick, standard, extended),
+          (General Intelligence, Coding &amp; Agentic, Local Efficiency), tiered profiles (quick, small, medium, standard, extended),
           and hardware telemetry.
         </p>
         <div class="hero-actions">
@@ -167,8 +167,10 @@
               <label for="profile-filter">Profile</label>
               <select id="profile-filter">
                 <option value="all">All profiles</option>
-                <option value="standard">Standard</option>
                 <option value="quick">Quick</option>
+                <option value="small">Small</option>
+                <option value="medium">Medium</option>
+                <option value="standard">Standard</option>
                 <option value="extended">Extended</option>
               </select>
             </div>
@@ -345,7 +347,7 @@
                 <span class="step-no">2</span>
                 <div>
                   <strong>Run evaluation</strong>
-                  <p>Supports llama.cpp, vLLM, transformers, or OpenAI-compatible endpoints with profiles (<code>quick</code>, <code>standard</code>, <code>extended</code>), or run interactively with <code>slm-bench tui</code>.</p>
+                  <p>Supports llama.cpp, vLLM, transformers, or OpenAI-compatible endpoints with profiles (<code>quick</code>, <code>small</code>, <code>medium</code>, <code>standard</code>, <code>extended</code>), or run interactively with <code>slm-bench tui</code>.</p>
                 </div>
               </li>
               <li class="step">
@@ -608,7 +610,7 @@ cd llm-auto-benchmark</pre>
 
           <div class="pr-step">
             <div class="pr-step-head"><span class="pr-step-no">2</span><strong>Run the evaluation</strong></div>
-            <p>Run against llama.cpp, vLLM, transformers, or a local OpenAI-compatible server using <code>quick</code>, <code>standard</code>, or <code>extended</code> profiles, or run interactively with <code>slm-bench tui</code>.</p>
+            <p>Run against llama.cpp, vLLM, transformers, or a local OpenAI-compatible server using <code>quick</code>, <code>small</code>, <code>medium</code>, <code>standard</code>, or <code>extended</code> profiles, or run interactively with <code>slm-bench tui</code>.</p>
             <div class="code-row">
               <pre>slm-bench evaluate \
   --model-id "qwen2.5:7b" \

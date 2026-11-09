@@ -41,17 +41,22 @@ A core principle of this project is **strict benchmark integrity**:
 
 ## Evaluation Profiles
 
-The evaluation suite supports three standardized profiles:
+The evaluation suite supports five tiers, from a harness smoke test to the full specialist suite:
 
-1. **`quick`** (Smoke Testing & Development):
-   - Deterministic seeded sample (e.g. 5 questions per benchmark).
-   - Tasks: MMLU-Pro, GPQA Diamond, GSM8K, MATH-500, IFEval.
+1. **`quick`** (Harness Smoke Test):
+   - 5 samples per task across MMLU-Pro, GPQA Diamond, GSM8K, MATH-500, and IFEval (25 total).
    - Status: Always labeled **`PARTIAL`**. Ineligible for the official leaderboard.
-2. **`standard`** (Core Official Leaderboard):
+2. **`small`** (Sanity Check):
+   - 1,000 samples total, split evenly across the six standard tasks (≈167 each), including BBH.
+   - Status: Always labeled **`PARTIAL`**. Ineligible for the official leaderboard.
+3. **`medium`** (Smell Test):
+   - 10,000 samples total: full splits for GPQA (198), MATH-500 (500), IFEval (541), and GSM8K (1,319), plus 3,721 each for MMLU-Pro and BBH.
+   - Status: Always labeled **`PARTIAL`**. Ineligible for the official leaderboard.
+4. **`standard`** (Core Official Leaderboard):
    - Full official test splits across core general intelligence pillars.
    - Tasks: Complete MMLU-Pro (12,032), GPQA Diamond (198), BBH (23 subtasks), GSM8K (1,319), MATH-500 (500), IFEval (541).
    - Status: Labeled **`FULL`** when all splits complete. Eligible for official leaderboard publication.
-3. **`extended`** (Full Specialist Suite):
+5. **`extended`** (Full Specialist Suite):
    - Standard suite + EvalPlus (HumanEval+/MBPP+ in Docker), BFCL v4, RULER, and XSTest.
    - Status: Labeled **`FULL`**.
 

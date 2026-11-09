@@ -193,6 +193,13 @@ def test_ifeval_constraints():
     assert check_all_lowercase("all lowercase letters here 123!")
 
 
+def test_ifeval_none_word_lists_do_not_crash():
+    passed, _ = verify_instruction_constraint("keywords:existence", {"keywords": None}, "hello")
+    assert passed is True
+    passed, _ = verify_instruction_constraint("forbidden_words", {"forbidden_words": None}, "hello")
+    assert passed is True
+
+
 # --------------------------------------------------------------------------
 # 6. Secure Container Sandbox Isolation
 # --------------------------------------------------------------------------

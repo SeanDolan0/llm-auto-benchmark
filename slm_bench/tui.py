@@ -43,7 +43,7 @@ from .models.metadata import fetch_hf_model_metadata
 from .models.memory_detector import auto_detect_model_ram_gb
 from .backends.registry import get_backend
 from .benchmarks.suite import BenchmarkSuite
-from .benchmarks.registry import EVALUATION_PROFILES
+from .benchmarks.registry import EVALUATION_PROFILES, PROFILE_TOTAL_SAMPLES
 from .models.schema import BenchmarkResult
 from .submission.git_manager import GitSubmissionManager
 from .submission.pr_manager import PullRequestManager
@@ -113,9 +113,14 @@ OFFICIAL_TASK_OPTIONS = [
 
 
 def _profile_label(profile: str) -> str:
-    tasks = EVALUATION_PROFILES.get(profile, [])
-    mode = "PARTIAL" if profile == "quick" else "FULL"
-    return f"{profile.capitalize()} ({len(tasks)} tasks - {mode})"
+    total = PROFILE_TOTAL_SAMPLES.get(profile)
+    if total is None:
+        count = f"{len(EVALUATION_PROFILES.get(profile, []))} tasks"
+        mode = "FULL"
+    else:
+        count = f"{total:,} samples"
+        mode = "PARTIAL"
+    return f"{profile.capitalize()} ({count} - {mode})"
 
 
 def _default_results_dir() -> str:
@@ -528,8 +533,10 @@ class SLMBenchTUI(App):
                 yield Label("Evaluation Profile:", classes="section-label")
                 yield Select(
                     [
-                        (_profile_label("standard"), "standard"),
                         (_profile_label("quick"), "quick"),
+                        (_profile_label("small"), "small"),
+                        (_profile_label("medium"), "medium"),
+                        (_profile_label("standard"), "standard"),
                         (_profile_label("extended"), "extended"),
                         ("Custom (Choose Official Tasks)", "custom"),
                     ],

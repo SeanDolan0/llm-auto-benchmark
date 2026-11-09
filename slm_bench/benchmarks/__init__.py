@@ -4,7 +4,15 @@ All custom handcrafted evaluations have been replaced with established, verifiab
 """
 
 from .base import BaseBenchmarkTask
-from .registry import BENCHMARK_REGISTRY, EVALUATION_PROFILES, get_task, list_available_tasks, get_profile_tasks
+from .registry import (
+    BENCHMARK_REGISTRY,
+    EVALUATION_PROFILES,
+    PROFILE_TOTAL_SAMPLES,
+    get_task,
+    list_available_tasks,
+    get_profile_tasks,
+    get_profile_sample_limits,
+)
 from .suite import BenchmarkSuite
 
 __all__ = [
@@ -12,7 +20,9 @@ __all__ = [
     "BenchmarkSuite",
     "BENCHMARK_REGISTRY",
     "EVALUATION_PROFILES",
+    "PROFILE_TOTAL_SAMPLES",
     "get_task",
     "list_available_tasks",
     "get_profile_tasks",
+    "get_profile_sample_limits",
 ]

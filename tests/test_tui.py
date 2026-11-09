@@ -88,6 +88,20 @@ def test_tui_profile_selection():
     asyncio.run(_test())
 
 
+def test_tui_profile_select_offers_small_and_medium():
+    """Verify the TUI profile selector accepts the new sampled tiers."""
+    async def _test():
+        app = SLMBenchTUI()
+        async with app.run_test() as pilot:
+            profile_sel = app.query_one("#select-profile", Select)
+            for value in ("small", "medium"):
+                profile_sel.value = value
+                await pilot.pause()
+                assert app.query_one("#select-profile", Select).value == value
+
+    asyncio.run(_test())
+
+
 def test_tui_custom_profile_shows_official_tasks():
     """Verify the custom profile reveals only the official benchmark task controls."""
     async def _test():
@@ -225,4 +239,13 @@ def test_tui_streaming_and_sample_logging():
             assert len(log.lines) > 0
 
     asyncio.run(_test())
+
+
+def test_tui_profile_labels_include_small_and_medium():
+    from slm_bench.tui import _profile_label
+
+    assert "PARTIAL" in _profile_label("small")
+    assert "PARTIAL" in _profile_label("medium")
+    assert "1,000" in _profile_label("small")
+    assert "10,000" in _profile_label("medium")
 

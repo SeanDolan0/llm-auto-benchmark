@@ -164,14 +164,14 @@ def verify_instruction_constraint(instruction_id: str, kwargs: Dict[str, Any], t
         return passed, "Valid JSON format"
 
     if "forbidden_words" in clean_id:
-        words = kwargs.get("forbidden_words", [])
+        words = kwargs.get("forbidden_words") or []
         if isinstance(words, str):
             words = [words]
         passed = check_forbidden_words(text, words)
         return passed, f"No forbidden words ({', '.join(words)})"
 
     if "existence" in clean_id or "keywords" in clean_id:
-        words = kwargs.get("keywords", [])
+        words = kwargs.get("keywords") or []
         if isinstance(words, str):
             words = [words]
         passed = check_keywords_existence(text, words)

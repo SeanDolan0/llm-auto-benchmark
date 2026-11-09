@@ -20,7 +20,7 @@ from .models.memory_detector import auto_detect_model_ram_gb
 from .models.schema import BenchmarkResult, TaskMetric
 from .backends.registry import get_backend
 from .benchmarks.suite import BenchmarkSuite
-from .benchmarks.registry import BENCHMARK_REGISTRY, EVALUATION_PROFILES, get_task, list_available_tasks
+from .benchmarks.registry import BENCHMARK_REGISTRY, EVALUATION_PROFILES, get_task, list_available_tasks, get_profile_sample_limits
 from .datasets.manager import DatasetManager, BENCHMARK_DATASET_META
 from .submission.git_manager import GitSubmissionManager
 from .submission.pr_manager import PullRequestManager
@@ -81,7 +81,7 @@ def evaluate(
     api_key: str = typer.Option("EMPTY", "--api-key", envvar="OPENAI_API_KEY", help="API key for custom or remote endpoint"),
     model_ram_gb: Optional[float] = typer.Option(None, "--model-ram-gb", "--ram-gb", help="Size in RAM / VRAM in GB that the model takes up"),
     output_dir: str = typer.Option("data/results", "--output-dir", "-o", help="Target directory for output JSON"),
-    profile: Optional[str] = typer.Option("standard", "--profile", "-p", help="Evaluation profile: quick, standard, extended"),
+    profile: Optional[str] = typer.Option("standard", "--profile", "-p", help="Evaluation profile: quick, small, medium, standard, extended"),
     benchmark: Optional[str] = typer.Option(None, "--benchmark", help="Specific single benchmark to run (e.g. gsm8k, gpqa_diamond)"),
     tasks: Optional[str] = typer.Option(None, "--tasks", "-t", help="Comma-separated list of tasks to run (mmlu_pro, gpqa_diamond, gsm8k, math500, ifeval)"),
     sample_limit: Optional[int] = typer.Option(None, "--sample-limit", "-n", help="Deterministic sample count (marks run as PARTIAL)"),
@@ -190,8 +190,10 @@ def evaluate(
         d_name = d_meta.get("name", tobj.task_id)
         d_rev = d_meta.get("revision", "official")
         d_split = d_meta.get("split", "test")
-        q_count = str(sample_limit or (5 if profile == "quick" and not sample_limit else d_meta.get("expected_count", "Full")))
-        p_mode = "PARTIAL (Sampled)" if (sample_limit or profile == "quick") else "FULL (Official Split)"
+        profile_limits = get_profile_sample_limits(profile) if not task_list else {}
+        task_limit = sample_limit if sample_limit is not None else (profile_limits or {}).get(tobj.task_id)
+        q_count = str(task_limit or d_meta.get("expected_count", "Full"))
+        p_mode = "PARTIAL (Sampled)" if task_limit else "FULL (Official Split)"
         banner_table.add_row(d_name, d_meta.get("source", "Official upstream"), d_rev, d_split, q_count, p_mode)
     console.print(banner_table)
 
@@ -300,7 +302,9 @@ def list_benchmarks_cmd():
     p_table.add_column("Profile", style="bold cyan")
     p_table.add_column("Status Output", style="yellow")
     p_table.add_column("Tasks Included")
-    p_table.add_row("QUICK", "PARTIAL", "Deterministic seeded sample for smoke testing (MMLU-Pro, GPQA, GSM8K, MATH-500, IFEval)")
+    p_table.add_row("QUICK", "PARTIAL", "5 samples/task for harness smoke testing (5 tasks: MMLU-Pro, GPQA, GSM8K, MATH-500, IFEval)")
+    p_table.add_row("SMALL", "PARTIAL", "1,000 samples total, split evenly across the 6 standard tasks incl. BBH")
+    p_table.add_row("MEDIUM", "PARTIAL", "10,000 samples total: full small splits + 3,721 each for MMLU-Pro and BBH")
     p_table.add_row("STANDARD", "FULL", "Complete official datasets for core reasoning, math, and instruction (MMLU-Pro, GPQA, BBH, GSM8K, MATH-500, IFEval)")
     p_table.add_row("EXTENDED", "FULL", "Standard + EvalPlus (Docker sandbox), BFCL v4, RULER, XSTest")
     console.print(p_table)
@@ -649,7 +653,7 @@ def batch(
     backend: str = typer.Option("mock", "--backend", "-b", help="Inference backend"),
     quantization: str = typer.Option("BF16", "--quantization", "-q", help="Quantization method"),
     output_dir: str = typer.Option("data/results", "--output-dir", "-o", help="Target results directory"),
-    profile: str = typer.Option("standard", "--profile", "-p", help="Evaluation profile: quick, standard, extended"),
+    profile: str = typer.Option("standard", "--profile", "-p", help="Evaluation profile: quick, small, medium, standard, extended"),
     sample_limit: Optional[int] = typer.Option(None, "--sample-limit", "-n", help="Sample limit per task"),
     submit: bool = typer.Option(False, "--submit", "-s", help="Submit PR for each model"),
     github_repo: Optional[str] = typer.Option(None, "--github-repo", help="Target GitHub repository"),

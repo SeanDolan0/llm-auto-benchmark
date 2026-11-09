@@ -119,10 +119,10 @@ class ScoringEngine:
         """
         Enforce strict leaderboard eligibility rules:
         - FULL: Complete official dataset, all samples evaluated, verified splits.
-        - PARTIAL: Sampled evaluation (e.g. quick profile or sample_limit). Ineligible for full leaderboard!
+        - PARTIAL: Sampled evaluation (quick/small/medium profiles, or an explicit sample_limit). Ineligible for full leaderboard!
         - INVALID: Integrity or scoring failures.
         """
-        if sample_limit is not None or profile == "quick":
+        if sample_limit is not None or profile in ("quick", "small", "medium"):
             return "PARTIAL", False
 
         for metric in task_metrics.values():

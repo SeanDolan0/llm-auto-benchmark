@@ -50,6 +50,7 @@ BENCHMARK_DATASET_META = {
         "revision": "main",
         "split": "test",
         "tasks_count": 23,
+        "expected_count": 6511,
         "description": "23 challenging multi-step algorithmic and symbolic reasoning subtasks.",
         "category": "reasoning",
     },

@@ -93,7 +93,7 @@ class BenchmarkResult(BaseModel):
     status: str = Field("FULL", description="Evaluation status: FULL, PARTIAL, INVALID")
     eligible_for_leaderboard: bool = Field(True, description="Whether this result is eligible for the official leaderboard")
     is_legacy: bool = Field(False, description="Whether this is a legacy deprecated record")
-    profile: Optional[str] = Field("standard", description="Evaluation profile: quick, standard, extended")
+    profile: Optional[str] = Field("standard", description="Evaluation profile: quick, small, medium, standard, extended")
     sampling_seed: Optional[int] = Field(None, description="Reproducible random sampling seed if sampled")
 
     model: ModelMetadata

@@ -15,7 +15,7 @@ from ..metrics.confidence import wilson_score_interval
 from ..scoring.scoring_engine import ScoringEngine, DEFAULT_CATEGORY_WEIGHTS, EXTENDED_CATEGORY_WEIGHTS
 from ..models.schema import BenchmarkResult, TaskMetric, CategoryScore, ModelMetadata, HardwareInfo
 from .base import BaseBenchmarkTask
-from .registry import get_task, get_profile_tasks, BENCHMARK_REGISTRY
+from .registry import get_task, get_profile_tasks, get_profile_sample_limits, BENCHMARK_REGISTRY
 from ..datasets.manager import BENCHMARK_DATASET_META
 from ..utils.logger import console, logger
 
@@ -76,9 +76,7 @@ class BenchmarkSuite:
         """
         active_tasks = self.resolve_tasks(selected_tasks=selected_tasks, profile=profile)
 
-        effective_sample_limit = sample_limit
-        if profile == "quick" and sample_limit is None:
-            effective_sample_limit = 5  # Deterministic quick profile smoke sample
+        profile_sample_limits = get_profile_sample_limits(profile) or {}
 
         logger.info(
             f"Starting official evaluation suite for [bold green]{model_meta.model_id}[/bold green] "
@@ -112,7 +110,8 @@ class BenchmarkSuite:
                     ds_name = meta.get("name", task.task_id)
                     ds_split = meta.get("split", "test")
                     ds_rev = meta.get("revision", "official")
-                    q_count = effective_sample_limit or meta.get("expected_count", "Full")
+                    task_limit = sample_limit if sample_limit is not None else profile_sample_limits.get(task.task_id)
+                    q_count = task_limit or meta.get("expected_count", "Full")
                     progress.update(
                         main_bar,
                         description=f"[cyan]Evaluating: {ds_name} ({ds_split}, {q_count} items)",
@@ -120,7 +119,7 @@ class BenchmarkSuite:
 
                     metric = task.run(
                         gateway,
-                        sample_limit=effective_sample_limit,
+                        sample_limit=task_limit,
                         on_sample=on_sample,
                         cancel_event=cancel_event,
                         seed=seed,
@@ -147,7 +146,7 @@ class BenchmarkSuite:
 
                 metric = task.run(
                     gateway,
-                    sample_limit=effective_sample_limit,
+                    sample_limit=sample_limit if sample_limit is not None else profile_sample_limits.get(task.task_id),
                     on_sample=on_sample,
                     cancel_event=cancel_event,
                     seed=seed,
@@ -174,7 +173,7 @@ class BenchmarkSuite:
         overall_status, is_eligible = engine.determine_run_status_and_eligibility(
             task_metrics=task_metrics,
             profile=profile,
-            sample_limit=effective_sample_limit,
+            sample_limit=sample_limit,
         )
 
         # 2. Performance Telemetry & Efficiency Index
@@ -204,7 +203,7 @@ class BenchmarkSuite:
             eligible_for_leaderboard=is_eligible,
             is_legacy=False,
             profile=profile,
-            sampling_seed=seed if (effective_sample_limit or profile == "quick") else None,
+            sampling_seed=seed if (sample_limit is not None or profile_sample_limits) else None,
             model=model_meta,
             hardware=hardware_info,
             tasks=task_metrics,

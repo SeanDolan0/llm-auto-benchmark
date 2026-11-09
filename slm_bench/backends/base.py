@@ -9,10 +9,11 @@ import time
 
 class GenerationResult:
     """Detailed result of a text generation call."""
-    def __init__(self, text: str, latency_ms: float, tokens_generated: int = 0):
+    def __init__(self, text: str, latency_ms: float, tokens_generated: int = 0, reused: bool = False):
         self.text = text
         self.latency_ms = latency_ms
         self.tokens_generated = tokens_generated
+        self.reused = reused
         self.tokens_per_sec = (tokens_generated / (latency_ms / 1000.0)) if latency_ms > 0 and tokens_generated > 0 else 0.0
 
 

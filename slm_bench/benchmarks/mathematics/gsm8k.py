@@ -181,6 +181,7 @@ class GSM8KBenchmark(BaseBenchmarkTask):
                 extracted_answer=extracted,
                 expected_answer=expected_norm,
                 is_correct=is_correct,
+                reused=gen.reused,
                 evaluation_error=None if extracted else "Unparsable or missing final numerical answer",
                 tokens_prompt=len(prompt.split()),
                 tokens_generated=gen.tokens_generated,

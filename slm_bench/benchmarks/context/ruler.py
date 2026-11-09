@@ -104,6 +104,7 @@ class RULERBenchmark(BaseBenchmarkTask):
                     extracted_answer=gen.text.strip(),
                     expected_answer=val,
                     is_correct=is_correct,
+                    reused=gen.reused,
                     tokens_prompt=ctx_len,
                     tokens_generated=gen.tokens_generated,
                     latency_ms=round(latency_ms, 2),

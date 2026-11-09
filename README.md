@@ -187,6 +187,23 @@ slm-bench evaluate \
   --benchmark gpqa_diamond
 ```
 
+#### Reuse prior answers (replay checkpoints):
+Pass `--checkpoint PATH` to read an existing JSONL checkpoint and append every new model call to it. A later run reuses calls whose model, quantization, backend, reasoning effort, task, dataset revision, and generation parameters match; everything else runs fresh.
+
+```bash
+# Start with a smaller run; its answers are written to the checkpoint.
+slm-bench evaluate --model-id "LiquidAI/LFM3-1.7B" --backend openai \
+  --endpoint-url "http://127.0.0.1:8099/v1" --quantization GGUF_F16 \
+  --profile small --checkpoint checkpoints/lfm3.jsonl
+
+# A later run reuses the matching answers instead of re-running them.
+slm-bench evaluate --model-id "LiquidAI/LFM3-1.7B" --backend openai \
+  --endpoint-url "http://127.0.0.1:8099/v1" --quantization GGUF_F16 \
+  --profile medium --checkpoint checkpoints/lfm3.jsonl
+```
+
+Reused questions are flagged (`"reused": true`) and counted in `provenance.reused_samples`; they are excluded from latency/throughput telemetry, and `local_efficiency` is omitted when an entire run is replayed. Checkpoint files are append-only and safe to keep across runs.
+
 ### 3. Inspect Question Provenance
 Inspect exact prompts, raw model responses, extracted answers, and constraint failure reasons:
 ```bash

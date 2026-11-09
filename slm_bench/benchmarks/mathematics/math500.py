@@ -114,6 +114,7 @@ class MATH500Benchmark(BaseBenchmarkTask):
                 extracted_answer=extracted,
                 expected_answer=expected,
                 is_correct=is_correct,
+                reused=gen.reused,
                 evaluation_error=None if extracted else "Unparsable or missing \\boxed{} mathematical answer",
                 tokens_prompt=len(prompt.split()),
                 tokens_generated=gen.tokens_generated,

@@ -111,6 +111,7 @@ class IFEvalBenchmark(BaseBenchmarkTask):
                 extracted_answer=f"{len(inst_ids) - len(constraint_failures)}/{len(inst_ids)} constraints met",
                 expected_answer="All constraints satisfied",
                 is_correct=all_inst_passed,
+                reused=gen.reused,
                 evaluation_error="; ".join(constraint_failures) if constraint_failures else None,
                 tokens_prompt=len(prompt.split()),
                 tokens_generated=gen.tokens_generated,

@@ -81,6 +81,7 @@ def evaluate(
     api_key: str = typer.Option("EMPTY", "--api-key", envvar="OPENAI_API_KEY", help="API key for custom or remote endpoint"),
     model_ram_gb: Optional[float] = typer.Option(None, "--model-ram-gb", "--ram-gb", help="Size in RAM / VRAM in GB that the model takes up"),
     output_dir: str = typer.Option("data/results", "--output-dir", "-o", help="Target directory for output JSON"),
+    checkpoint: Optional[str] = typer.Option(None, "--checkpoint", help="Read/write a JSONL replay checkpoint to reuse prior model calls"),
     profile: Optional[str] = typer.Option("standard", "--profile", "-p", help="Evaluation profile: quick, small, medium, standard, extended"),
     benchmark: Optional[str] = typer.Option(None, "--benchmark", help="Specific single benchmark to run (e.g. gsm8k, gpqa_diamond)"),
     tasks: Optional[str] = typer.Option(None, "--tasks", "-t", help="Comma-separated list of tasks to run (mmlu_pro, gpqa_diamond, gsm8k, math500, ifeval)"),
@@ -101,6 +102,8 @@ def evaluate(
         profile = "standard"
     if isinstance(model_ram_gb, typer.models.OptionInfo):
         model_ram_gb = None
+    if isinstance(checkpoint, typer.models.OptionInfo):
+        checkpoint = None
     if isinstance(benchmark, typer.models.OptionInfo):
         benchmark = None
     if isinstance(tasks, typer.models.OptionInfo):
@@ -207,6 +210,7 @@ def evaluate(
         sample_limit=sample_limit,
         notes=final_notes,
         seed=seed,
+        checkpoint_path=checkpoint,
     )
 
     # 7. Save JSON Output

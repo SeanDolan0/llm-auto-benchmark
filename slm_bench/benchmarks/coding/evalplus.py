@@ -172,6 +172,7 @@ check({entry_point})
                 extracted_answer=extracted_code,
                 expected_answer="Official expanded hidden tests pass",
                 is_correct=is_passed,
+                reused=gen.reused,
                 evaluation_error=None if is_passed else err_msg,
                 tokens_prompt=len(prompt.split()),
                 tokens_generated=gen.tokens_generated,

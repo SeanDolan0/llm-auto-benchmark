@@ -105,3 +105,32 @@ def test_cli_evaluate_with_reasoning_effort(tmp_path):
     assert len(saved_files) == 1
     content = json.loads(saved_files[0].read_text(encoding="utf-8"))
     assert content["model"]["reasoning_effort"] == "low"
+
+
+def test_cli_checkpoint_replays_prior_answers(tmp_path):
+    import json
+
+    checkpoint = tmp_path / "cache.jsonl"
+    base = [
+        "evaluate",
+        "--model-id", "test/model",
+        "--backend", "mock",
+        "--benchmark", "gsm8k",
+        "--sample-limit", "2",
+        "--checkpoint", str(checkpoint),
+    ]
+
+    cold_dir = tmp_path / "cold"
+    cold = runner.invoke(app, base + ["--output-dir", str(cold_dir), "--notes", "cold"])
+    assert cold.exit_code == 0, cold.output
+
+    warm_dir = tmp_path / "warm"
+    warm = runner.invoke(app, base + ["--output-dir", str(warm_dir), "--notes", "warm"])
+    assert warm.exit_code == 0, warm.output
+
+    [result_file] = list(warm_dir.glob("*.json"))
+    data = json.loads(result_file.read_text(encoding="utf-8"))
+    assert data["provenance"]["reused_samples"] == 2
+    assert data["provenance"]["checkpoint"]["reused_calls"] == 2
+    assert data["local_efficiency"] is None
+    assert all(q["reused"] for q in data["tasks"]["gsm8k"]["question_results"])

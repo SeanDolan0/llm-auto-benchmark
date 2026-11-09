@@ -47,6 +47,7 @@ class QuestionResult(BaseModel):
     extracted_answer: Optional[str] = Field(None, description="Deterministic extracted answer")
     expected_answer: Optional[str] = Field(None, description="Ground truth answer or expected value")
     is_correct: bool = Field(..., description="Evaluation outcome")
+    reused: bool = Field(False, description="Whether this result was served from a replay checkpoint")
     evaluation_error: Optional[str] = Field(None, description="Evaluation or execution error if any")
     tokens_prompt: Optional[int] = Field(None, description="Input tokens count")
     tokens_generated: Optional[int] = Field(None, description="Generated tokens count")
